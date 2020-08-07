@@ -91,28 +91,35 @@ char* get_buffer2(){
 
 //Processor function: Goes through temp and changes
 //pairs of plus signs to ^ character
-char* replace_plus_signs(char* temp){    
-    int temp_ind = 0;
-    int new_temp_ind = 0;
+char* replace_plus_signs(char* temp){ 
+
+    printf("temp in replace_plus_signs: %s\n", temp);
     int temp_len = strlen(temp);
-
-    char new_temp[temp_len];
-    memset(new_temp, '\0', strlen(new_temp));
-
     printf("temp_len = %d\n", temp_len);
+    int index = 0;
+    
+    //Go through each character of temp
+    while(index < temp_len){
+        //Found pair
+        if(temp[index] == '+' && temp[index + 1] == '+'){
+            //Replace first '+' with '^'
+            temp[index] = '^';
 
-    while(new_temp_ind < temp_len){
-        if(temp[temp_ind] == '+' && temp[temp_ind + 1] == '+'){
-            new_temp[new_temp_ind] = '^';
-            temp_ind += 2;
+            //Shift all other characters down
+            for(int j = index + 1; j < temp_len; j++){
+                temp[j] = temp[j + 1];
+            }
+
+            //Put null terminating charcter where last char was
+            temp[temp_len - 1] = '\0';
+
+            //Decreminate temp_len since we removed a char
+            temp_len --;
         }
-        else{
-            new_temp[new_temp_ind] = temp[temp_ind];
-            temp_ind++;
-        }
-        new_temp_ind++;
+        index++;
     }
-    return new_temp;
+
+    return temp;
 }
 
 //Producer function: Copies or concatenate 
@@ -125,7 +132,19 @@ void fill_buffer3(char* temp){
         strcat(buffer3, temp);
     }
 }
+/****************************************************
+*       End of *line_sep producer, process, and
+*       consumer functions
+*****************************************************/
 
+//Consumer function: Extracts buffer1 into a temporary
+//char array, then emptys buffer1
+char* get_buffer3(){
+    char temp[strlen(buffer3)];
+    strcpy(temp, buffer3);
+    memset(buffer3, '\0', strlen(buffer3));
+    return temp;
+}
 /***********************************************
 *               bool input_p()
 *
@@ -239,9 +258,6 @@ void *line_sep(void *args){
         //Try to take buffer2_mutex if plus_rep doesn't have it
         pthread_mutex_lock(&buffer2_mutex);
 
-        //printf("line_sep has buffer2_mutex\n");
-        //printf("strlen(buffer2) = %d\n", strlen(buffer2));
-
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER2 TO BE EMPTY)
         while(strlen(buffer2) > 0){
             //printf("        *input waiting for buf1_empty, giving up lock\n");
@@ -287,17 +303,61 @@ void *plus_rep(void *args){
         //Unlock buffer2_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer2_mutex);
 
-        printf("temp in plus_rep before replace: %s\n", temp);
-
+        //Process temp
         replace_plus_signs(temp);
 
-        printf("temp in plus_rep after replace: %s\n", temp);
+        //Producer Buffer3
+        //Try to take buffer3_mutex if output doesn't have it
+        pthread_mutex_lock(&buffer3_mutex);
 
+        //SHOULDN'T NEED THIS(WAITS FOR BUFFER2 TO BE EMPTY)
+        while(strlen(buffer3) > 0){
+            pthread_cond_wait(&buf3_empty, &buffer3_mutex);
+        }
+
+        //Put temp variable in buffer3
         fill_buffer3(temp);
         printf("Buffer3: %s\n", buffer3);
+
+        //Singal to output that buffer3 is no longer empty
+        pthread_cond_signal(&buf3_full);
+
+        //Unlock buffer3_mutex so output can do its thing
+        pthread_mutex_unlock(&buffer3_mutex);
     }
 }
 
+/***********************************************
+*          void *output(void *args)
+*
+* Thread handler for output
+* Consumer Only
+***********************************************/
+void *output(void *args){
+    while(terminate == false){
+
+        //Lock buffer3_mutex before using buffer3
+        pthread_mutex_lock(&buffer3_mutex);
+
+        //Wait until buffer3 has something in it
+        //Signal coming from *input
+        while(strlen(buffer3) == 0){
+            //printf("        *line_Sep waiting for buf1_full, giving up buffer1_mutex\n");
+            pthread_cond_wait(&buf3_full, &buffer3_mutex);
+        }
+
+        //Acquire buffer3
+        //NEED TO CHANGE get_buffer3() TO NOT MEMSET. 
+        char* temp = get_buffer3();
+        printf("temp in output: %s\n", temp);
+
+        //SHOULDN'T NEED TO DO THIS (SIGNALS TO *plus_rep THAT BUFFER 1 IS EMPTY)
+        pthread_cond_signal(&buf3_empty);
+
+        //Unlock buffer3_mutex so *plus_rep can do its thing
+        pthread_mutex_unlock(&buffer3_mutex);
+    }
+}
 /***********************************************
 *               int main()
 ***********************************************/
@@ -311,13 +371,13 @@ int main(){
     pthread_create(&in, NULL, input, NULL);
     pthread_create(&line, NULL, line_sep, NULL);
     pthread_create(&plus, NULL, plus_rep, NULL);
-    //pthread_create(&out, NULL, output, NULL);
+    pthread_create(&out, NULL, output, NULL);
 
 
     pthread_join(in, NULL);
     pthread_join(line, NULL);
     pthread_join(plus, NULL);
-    //pthread_join(out, NULL);
+    pthread_join(out, NULL);
 
     free(buffer1);
     free(buffer2);
