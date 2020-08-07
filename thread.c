@@ -45,6 +45,18 @@ int produce(int i)
 }
 
 /*
+ Get the next item from the buffer
+*/
+int consume()
+{
+    int value = buffer[con_idx];
+    // Increment the index from which the item will be picked up, rolling over to the start of the buffer if currently at the end of the buffer
+    con_idx = (con_idx + 1) % SIZE;
+    count--;
+    return value;
+}
+
+/*
  Function that the producer thread will run. Produce an item and put in the buffer only if there is space in the buffer. If the buffer is full, then wait until there is space in the buffer.
 */
 void *producer(void *args)
@@ -63,18 +75,6 @@ void *producer(void *args)
       pthread_mutex_unlock(&mutex);
     }
     return NULL;
-}
-
-/*
- Get the next item from the buffer
-*/
-int consume()
-{
-    int value = buffer[con_idx];
-    // Increment the index from which the item will be picked up, rolling over to the start of the buffer if currently at the end of the buffer
-    con_idx = (con_idx + 1) % SIZE;
-    count--;
-    return value;
 }
 
 /*
