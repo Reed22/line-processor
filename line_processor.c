@@ -102,18 +102,17 @@ void input_p(char* tempBuf){
 
 //Goes through temp and changes any line 
 //separators to space characters
-char* replace_line_separators(char* temp){
+void replace_line_separators(char* temp){
     for(int i = 0; i < strlen(temp); i++){
         //Checks for newline and carriage return
         if(temp[i] == '\r' || temp[i] == '\n')
             temp[i] = ' ';
     }
-    return temp;
 }
 
 //Goes through temp and changes pairs of 
 //plus signs to ^ character
-char* replace_plus_signs(char* temp){ 
+void replace_plus_signs(char* temp){ 
     int temp_len = strlen(temp);
     int index = 0;
     
@@ -137,8 +136,6 @@ char* replace_plus_signs(char* temp){
         }
         index++;
     }
-
-    return temp;
 }
 
 //Outputs if 80 characters are in buffer
@@ -168,6 +165,7 @@ void output_c(){
 
     }
 }
+
 /***************************************
 * Producer functions for all threads
 * Each function performs the same, but 
