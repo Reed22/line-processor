@@ -16,7 +16,7 @@
 char* buffer1;  //Shared between input and line_sep
 char* buffer2;  //Shared between line_sep and plus_replace
 char* buffer3;  //Shared between plus_replace and output
-char* buffer4;  //Used by output
+char* buffer4;
 
 char* line_temp;
 
@@ -38,13 +38,16 @@ pthread_cond_t buf2_empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t buf3_full = PTHREAD_COND_INITIALIZER;
 pthread_cond_t buf3_empty = PTHREAD_COND_INITIALIZER;
 
-/****************************************************
-*       Start of *line_sep producer, process, and
-*       consumer functions
-*****************************************************/
+/***************************************
+* Consumer functions for all threads
+*
+* Each function performs the same, but 
+* on a different buffer. Copies the buffer 
+* into a temporary variable and clears
+* out the buffer. Returns the contents
+* of the buffer
+***************************************/
 
-//Consumer function: Extracts buffer1 into a temporary
-//char array, then emptys buffer1
 char* get_buffer1(){
     char temp[strlen(buffer1)];
     strcpy(temp, buffer1);
@@ -52,39 +55,6 @@ char* get_buffer1(){
     return temp;
 }
 
-//Processor function: Goes through temp and changes
-//any line separators to space characters
-char* replace_line_separators(char* temp){
-    for(int i = 0; i < strlen(temp); i++){
-        if(temp[i] == '\r' || temp[i] == '\n')
-            temp[i] = ' ';
-    }
-    return temp;
-}
-
-//Producer function: Copies or concatenate 
-//temp to buffer2
-void fill_buffer2(char* temp){
-    if(strlen(buffer2) == 0){
-        strcpy(buffer2, temp);
-    }
-    else{
-        strcat(buffer2, temp);
-    }
-}
-
-/****************************************************
-*       End of *line_sep producer, process, and
-*       consumer functions
-*****************************************************/
-
-/****************************************************
-*       Start of *line_sep producer, process, and
-*       consumer functions
-*****************************************************/
-
-//Consumer function: Extracts buffer1 into a temporary
-//char array, then emptys buffer1
 char* get_buffer2(){
     char temp[strlen(buffer2)];
     strcpy(temp, buffer2);
@@ -92,13 +62,59 @@ char* get_buffer2(){
     return temp;
 }
 
-//Processor function: Goes through temp and changes
-//pairs of plus signs to ^ character
-char* replace_plus_signs(char* temp){ 
+char* get_buffer3(){
+    char temp[strlen(buffer3)];
+    strcpy(temp, buffer3);
+    memset(buffer3, '\0', strlen(buffer3));
+    return temp;
+}
 
-    //printf("temp in replace_plus_signs: %s\n", temp);
+/***************************************
+* Processor functions for all threads
+*
+* Each function is different and performs
+* certain processes on the char* variable
+* that is passed to it. Returns the char*
+* after it is finished altering it based
+* on the function's responsibilities. 
+*
+* None of these functions are in critical
+* sections of any thread
+***************************************/
+
+//Reads user input, checks for null terminating character,
+void input_p(char* tempBuf){
+    size_t len = SIZE;  
+    char buf[256];
+    getline(&tempBuf, &len, stdin);
+
+    //sscanf will strip the carriage return from tempBuf before placing in buf
+    //This will make the strcmp work as expected
+    sscanf(tempBuf, "%s", buf);
+
+    //If terminating input line is found, 
+    //Need to account for input like "DONE more stuff"
+    //sscanf will strip off first word and mistake above example as terminating
+    if(strcmp(buf, "DONE") == 0){
+        terminate = true;
+    }
+}
+
+//Goes through temp and changes any line 
+//separators to space characters
+char* replace_line_separators(char* temp){
+    for(int i = 0; i < strlen(temp); i++){
+        //Checks for newline and carriage return
+        if(temp[i] == '\r' || temp[i] == '\n')
+            temp[i] = ' ';
+    }
+    return temp;
+}
+
+//Goes through temp and changes pairs of 
+//plus signs to ^ character
+char* replace_plus_signs(char* temp){ 
     int temp_len = strlen(temp);
-    //printf("temp_len = %d\n", temp_len);
     int index = 0;
     
     //Go through each character of temp
@@ -125,51 +141,13 @@ char* replace_plus_signs(char* temp){
     return temp;
 }
 
-//Producer function: Copies or concatenate 
-//temp to buffer2
-void fill_buffer3(char* temp){
-    if(strlen(buffer3) == 0){
-        strcpy(buffer3, temp);
-    }
-    else{
-        strcat(buffer3, temp);
-    }
-}
-
-/****************************************************
-*       Functions used by output
-*****************************************************/
-//Consumer Function: Grabs buffer 3 and resets
-char* get_buffer3(){
-    char temp[strlen(buffer3)];
-    strcpy(temp, buffer3);
-    memset(buffer3, '\0', strlen(buffer3));
-    return temp;
-}
-
-//Adds to buffer4
-//Buffer4 is only used by output
-void fill_buffer4(char* temp){
-    if(strlen(buffer4) == 0){
-        strcpy(buffer4, temp);
-    }
-    else{
-        strcat(buffer4, temp);
-    }
-}
-
-/*********************************************
-*           void output_c()
-*
-* Prints 80 characters if there are 80 character
-* in buffer4.
-*********************************************/
+//Outputs if 80 characters are in buffer
 void output_c(){
     int buffer4_len = strlen(buffer4);
     int offset = 0;  //Used for copying characters from 80th+ index to offset index
 
     //If buffer has at least 80 characters, print buffer
-    if(buffer4_len >= CHAR_PER_LINE){
+    while(buffer4_len >= CHAR_PER_LINE){
         printf("((%.80s))\n", buffer4);
 
         //Clear out first 80 character of buffer3
@@ -183,44 +161,54 @@ void output_c(){
             buffer4[i] = '\0';
             offset++;
         }
+        buffer4_len = strlen(buffer4);
     }
 }
-/***********************************************
-*               bool input_p()
+/***************************************
+* Producer functions for all threads
+* Each function performs the same, but 
+* on a different buffer. If the buffer 
+* is empty, it performs a strcpy, if 
+* it is not empty then it performs a 
+* strcat.
 *
-* Reads user input into temporary buffer and 
-* adds it to global variable buffer1
+* Parameters: char* that will be
+* inserted into buffer
 *
-* Returns true if terminating string found,
-* false otherwise
-***********************************************/
-bool input_p(){
-    size_t len = SIZE;  
-    char* tempBuf = (char *)malloc(MAX_LINE * sizeof(char)); //Temporary buffer that will add to buffer1
-    char buf[256];
-    getline(&tempBuf, &len, stdin);
+***************************************/
 
-    //sscanf will strip the carriage return from tempBuf before placing in buf
-    //This will make the strcmp work as expected
-    sscanf(tempBuf, "%s", buf);
+void fill_buffer1(char* temp){
+    if(strlen(buffer1) == 0)
+        strcpy(buffer1, temp);
+    else
+        strcat(buffer1, temp);
+}
 
-    //If terminating input line is found, 
-    //Need to account for input like "DONE more stuff"
-    //sscanf will strip off first word and mistake above example as terminating
-    if(strcmp(buf, "DONE") == 0){
-        return true;
+void fill_buffer2(char* temp){
+    if(strlen(buffer2) == 0){
+        strcpy(buffer2, temp);
     }
-
-    //Otherwise, insert string into buffer1
     else{
-        //If buffer is empty, perform strcpy, else strcat
-        if(strlen(buffer1) == 0)
-            strcpy(buffer1, tempBuf);
-        else
-            strcat(buffer1, tempBuf);
+        strcat(buffer2, temp);
     }
-    free(tempBuf);
-    return false;
+}
+
+void fill_buffer3(char* temp){
+    if(strlen(buffer3) == 0){
+        strcpy(buffer3, temp);
+    }
+    else{
+        strcat(buffer3, temp);
+    }
+}
+
+void fill_buffer4(char* temp){
+    if(strlen(buffer4) == 0){
+        strcpy(buffer4, temp);
+    }
+    else{
+        strcat(buffer4, temp);
+    }
 }
 
 /***********************************************
@@ -230,32 +218,32 @@ bool input_p(){
 * Producer only
 ***********************************************/
 void *input(void *args){
-    while(terminate == false){
-        //printf("in *input\n");
+    char* tempBuf = (char *)malloc(MAX_LINE * sizeof(char)); //Temporary buffer that will add to buffer1
 
+    while(terminate == false){
+        input_p(tempBuf);
         //Lock buffer1_mutex before changing buffer1
         pthread_mutex_lock(&buffer1_mutex);
 
-        //printf("    *input has lock\n");
-
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER1 TO BE EMPTY)
         while(strlen(buffer1) > 0){
-            //printf("        *input waiting for buf1_empty, giving up lock\n");
             pthread_cond_wait(&buf1_empty, &buffer1_mutex);
         }
 
         //Perform input
-        terminate = input_p();
+        fill_buffer1(tempBuf);
         printf("Buffer1: %s\n", buffer1);
 
         //Signal to line consumer that buffer1 is no longer empty
         pthread_cond_signal(&buf1_full);
-        //printf("*input signalled buf1_full\n");
 
         //Unlock mutex
         pthread_mutex_unlock(&buffer1_mutex);
-        //printf("*input unlocked buffer1_mutext\n");
+        
+        memset(tempBuf, '\0', strlen(tempBuf));
+
     }
+    free(tempBuf);
 }
 
 /***********************************************
@@ -398,6 +386,7 @@ void *output(void *args){
         printf("Buffer4 : %s\n", buffer4);
         free(temp);
     }
+    free(buffer4);
 }
 /***********************************************
 *               int main()
@@ -424,7 +413,6 @@ int main(){
     free(buffer1);
     free(buffer2);
     free(buffer3);
-    free(buffer4);
 
     return 0;
 }
