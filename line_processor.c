@@ -16,6 +16,9 @@
 char* buffer1;  //Shared between input and line_sep
 char* buffer2;  //Shared between line_sep and plus_replace
 char* buffer3;  //Shared between plus_replace and output
+char* buffer4;  //Used by output
+
+char* line_temp;
 
 bool terminate = false; //Flag that determines whether terminating string found
 
@@ -93,9 +96,9 @@ char* get_buffer2(){
 //pairs of plus signs to ^ character
 char* replace_plus_signs(char* temp){ 
 
-    printf("temp in replace_plus_signs: %s\n", temp);
+    //printf("temp in replace_plus_signs: %s\n", temp);
     int temp_len = strlen(temp);
-    printf("temp_len = %d\n", temp_len);
+    //printf("temp_len = %d\n", temp_len);
     int index = 0;
     
     //Go through each character of temp
@@ -132,18 +135,55 @@ void fill_buffer3(char* temp){
         strcat(buffer3, temp);
     }
 }
-/****************************************************
-*       End of *line_sep producer, process, and
-*       consumer functions
-*****************************************************/
 
-//Consumer function: Extracts buffer1 into a temporary
-//char array, then emptys buffer1
+/****************************************************
+*       Functions used by output
+*****************************************************/
+//Consumer Function: Grabs buffer 3 and resets
 char* get_buffer3(){
     char temp[strlen(buffer3)];
     strcpy(temp, buffer3);
     memset(buffer3, '\0', strlen(buffer3));
     return temp;
+}
+
+//Adds to buffer4
+//Buffer4 is only used by output
+void fill_buffer4(char* temp){
+    if(strlen(buffer4) == 0){
+        strcpy(buffer4, temp);
+    }
+    else{
+        strcat(buffer4, temp);
+    }
+}
+
+/*********************************************
+*           void output_c()
+*
+* Prints 80 characters if there are 80 character
+* in buffer4.
+*********************************************/
+void output_c(){
+    int buffer4_len = strlen(buffer4);
+    int offset = 0;  //Used for copying characters from 80th+ index to offset index
+
+    //If buffer has at least 80 characters, print buffer
+    if(buffer4_len >= CHAR_PER_LINE){
+        printf("((%.80s))\n", buffer4);
+
+        //Clear out first 80 character of buffer3
+        memset(buffer4, '\0', CHAR_PER_LINE);
+
+        //Copy 80th char on to beginning of buffer4
+        //offset = 0,1,2,3...
+        //i = 80, 81, 82...
+        for(int i = CHAR_PER_LINE; i < buffer4_len; i++){
+            buffer4[offset] = buffer4[i];
+            buffer4[i] = '\0';
+            offset++;
+        }
+    }
 }
 /***********************************************
 *               bool input_p()
@@ -226,29 +266,25 @@ void *input(void *args){
 ***********************************************/
 void *line_sep(void *args){
     while(terminate == false){
-        //printf("in *line_sep\n");
 
         //Lock buffer1_mutex before using buffer1
         pthread_mutex_lock(&buffer1_mutex);
-        //printf("    *line_sep consumer has buffer1_mutex\n");
 
         //Wait until buffer1 has something in it
         //Signal coming from *input
         while(strlen(buffer1) == 0){
-            //printf("        *line_Sep waiting for buf1_full, giving up buffer1_mutex\n");
             pthread_cond_wait(&buf1_full, &buffer1_mutex);
         }
 
         //Acquire buffer1
-        char* temp = get_buffer1();
+        char* temp = (char *)malloc(SIZE * sizeof(char));
+        strcpy(temp, get_buffer1());
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 1 IS EMPTY)
         pthread_cond_signal(&buf1_empty);
 
         //Unlock buffer1_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer1_mutex);
-        //printf("*line_sep has unlocked buffer1_mutex\n");
-
        
         //Process temp
         replace_line_separators(temp);
@@ -260,7 +296,6 @@ void *line_sep(void *args){
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER2 TO BE EMPTY)
         while(strlen(buffer2) > 0){
-            //printf("        *input waiting for buf1_empty, giving up lock\n");
             pthread_cond_wait(&buf2_empty, &buffer2_mutex);
         }
 
@@ -273,7 +308,8 @@ void *line_sep(void *args){
 
         //Unlock buffer2_mutex so plus_rep can do its thing
         pthread_mutex_unlock(&buffer2_mutex);
-        //printf("                line_sep is unlocking buffer2_mutex\n");    
+
+        free(temp);
     }
 }
 /***********************************************
@@ -295,7 +331,8 @@ void *plus_rep(void *args){
         }
 
         //Acquire buffer2
-        char* temp = get_buffer2();
+        char* temp = (char *)malloc(SIZE * sizeof(char));
+        strcpy(temp, get_buffer2());
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 2 IS EMPTY)
         pthread_cond_signal(&buf2_empty);
@@ -317,45 +354,49 @@ void *plus_rep(void *args){
 
         //Put temp variable in buffer3
         fill_buffer3(temp);
-        printf("Buffer3: %s\n", buffer3);
+        printf("Buffer3 in plus_repl: %s\n", buffer3);
 
         //Singal to output that buffer3 is no longer empty
         pthread_cond_signal(&buf3_full);
 
         //Unlock buffer3_mutex so output can do its thing
         pthread_mutex_unlock(&buffer3_mutex);
+        free(temp);
     }
 }
-
 /***********************************************
 *          void *output(void *args)
 *
 * Thread handler for output
-* Consumer Only
+* Consumer only
 ***********************************************/
 void *output(void *args){
     while(terminate == false){
 
-        //Lock buffer3_mutex before using buffer3
+        //Lock buffer2_mutex before using buffer1
         pthread_mutex_lock(&buffer3_mutex);
 
-        //Wait until buffer3 has something in it
-        //Signal coming from *input
+        //Wait until buffer2 has something in it
+        //Signal coming from *line_sep
         while(strlen(buffer3) == 0){
-            //printf("        *line_Sep waiting for buf1_full, giving up buffer1_mutex\n");
             pthread_cond_wait(&buf3_full, &buffer3_mutex);
         }
 
-        //Acquire buffer3
-        //NEED TO CHANGE get_buffer3() TO NOT MEMSET. 
-        char* temp = get_buffer3();
-        printf("temp in output: %s\n", temp);
+        //Acquire buffer2
+        char* temp = (char *)malloc(SIZE * sizeof(char));
+        strcpy(temp, get_buffer3());
 
-        //SHOULDN'T NEED TO DO THIS (SIGNALS TO *plus_rep THAT BUFFER 1 IS EMPTY)
+        //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 2 IS EMPTY)
         pthread_cond_signal(&buf3_empty);
 
-        //Unlock buffer3_mutex so *plus_rep can do its thing
+        //Unlock buffer2_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer3_mutex);
+
+        //Place temp in buffer4 and process
+        fill_buffer4(temp);
+        output_c();
+        printf("Buffer4 : %s\n", buffer4);
+        free(temp);
     }
 }
 /***********************************************
@@ -366,7 +407,8 @@ int main(){
     buffer1 = (char *)malloc(SIZE * sizeof(char));
     buffer2 = (char *)malloc(SIZE * sizeof(char));
     buffer3 = (char *)malloc(SIZE * sizeof(char));
-    
+    buffer4 = (char *)malloc(SIZE * sizeof(char));
+
     //Create threads
     pthread_create(&in, NULL, input, NULL);
     pthread_create(&line, NULL, line_sep, NULL);
@@ -382,6 +424,7 @@ int main(){
     free(buffer1);
     free(buffer2);
     free(buffer3);
+    free(buffer4);
 
     return 0;
 }

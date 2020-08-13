@@ -188,7 +188,15 @@ fn main() {
 fn partition_data(num_partitions: usize, v: &Vec<usize>) -> Vec<Vec<usize>>{
     
     //partition size will be length of data vector divided by number of partitions 
-    let partition_size = v.len() / num_partitions;
+    let mut partition_size = v.len() / num_partitions;
+    //This will determine whether the partitions will have uneven sizes.
+    let partition_size_exact = v.len() as f64 / num_partitions as f64;
+
+    //Increment partition_size by 1 if partition sizes are uneven.
+    if partition_size_exact > partition_size as f64{
+        partition_size = partition_size + 1;
+    }    
+
     let mut xv: Vec<Vec<usize>> = Vec::new();
     
     let mut v_index = 0;
@@ -200,10 +208,15 @@ fn partition_data(num_partitions: usize, v: &Vec<usize>) -> Vec<Vec<usize>>{
         for _i in 0..partition_size{
             x1.push(v[v_index]);
             v_index = v_index + 1;
+            //Once v_index reaches last element in v, break out,
+            //Will only happen on final parition 
+            if v_index == v.len(){
+                break;
+            }
         }
         //Push partition vector to combined vector
         xv.push(x1);
     }
-
+    
     xv
 }
