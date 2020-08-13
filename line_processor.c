@@ -141,8 +141,8 @@ void replace_plus_signs(char* temp){
 //Outputs if 80 characters are in buffer
 void output_c(){
     int buffer4_len = strlen(buffer4);
-    printf("buffer4_len before: %d\n", buffer4_len);
-    int offset = 0;  //Used for copying characters from 80th+ index to offset index
+    //printf("buffer4_len before: %d\n", buffer4_len);
+    int offset;  //Used for copying characters from 80th+ index to offset index
 
     //If buffer has at least 80 characters, print buffer
     while(buffer4_len >= CHAR_PER_LINE){
@@ -154,14 +154,14 @@ void output_c(){
         //Copy 80th char on to beginning of buffer4
         //offset = 0,1,2,3...
         //i = 80, 81, 82...
+        offset = 0;
         for(int i = CHAR_PER_LINE; i < buffer4_len; i++){
             buffer4[offset] = buffer4[i];
             buffer4[i] = '\0';
             offset++;
         }
-        printf("buffer4_len before: %d\n", buffer4_len);
-        buffer4_len = buffer4_len - CHAR_PER_LINE;//strlen(buffer4);
-        printf("buffer4_len after: %d\n", buffer4_len);
+
+        buffer4_len = buffer4_len - CHAR_PER_LINE;
 
     }
 }
@@ -224,17 +224,18 @@ void *input(void *args){
 
     while(terminate == false){
         input_p(tempBuf);
+        printf("tempBuf: %s\n", tempBuf);
         //Lock buffer1_mutex before changing buffer1
         pthread_mutex_lock(&buffer1_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER1 TO BE EMPTY)
-      //  while(strlen(buffer1) > 0){
+        //while(strlen(buffer1) > 0){
         //    pthread_cond_wait(&buf1_empty, &buffer1_mutex);
         //}
 
         //Perform input
         fill_buffer1(tempBuf);
-        printf("Buffer1: %s\n", buffer1);
+        //printf("Buffer1: %s\n", buffer1);
 
         //Signal to line consumer that buffer1 is no longer empty
         pthread_cond_signal(&buf1_full);
@@ -271,7 +272,7 @@ void *line_sep(void *args){
         strcpy(temp, get_buffer1());
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 1 IS EMPTY)
-       // pthread_cond_signal(&buf1_empty);
+        //pthread_cond_signal(&buf1_empty);
 
         //Unlock buffer1_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer1_mutex);
@@ -285,13 +286,13 @@ void *line_sep(void *args){
         pthread_mutex_lock(&buffer2_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER2 TO BE EMPTY)
-        while(strlen(buffer2) > 0){
-            pthread_cond_wait(&buf2_empty, &buffer2_mutex);
-        }
+       // while(strlen(buffer2) > 0){
+         //   pthread_cond_wait(&buf2_empty, &buffer2_mutex);
+        //}
 
         //Put temp variable in buffer2
         fill_buffer2(temp);
-        printf("Buffer2: %s\n", buffer2);
+        //printf("Buffer2: %s\n", buffer2);
 
         //Singal to plus_rep that buffer2 is no longer empty
         pthread_cond_signal(&buf2_full);
@@ -325,12 +326,13 @@ void *plus_rep(void *args){
         strcpy(temp, get_buffer2());
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 2 IS EMPTY)
-        pthread_cond_signal(&buf2_empty);
+        //pthread_cond_signal(&buf2_empty);
 
         //Unlock buffer2_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer2_mutex);
 
         //Process temp
+        printf("BUFFER2: %s\n", buffer2);
         replace_plus_signs(temp);
 
         //Producer Buffer3
@@ -338,13 +340,13 @@ void *plus_rep(void *args){
         pthread_mutex_lock(&buffer3_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER2 TO BE EMPTY)
-        while(strlen(buffer3) > 0){
-            pthread_cond_wait(&buf3_empty, &buffer3_mutex);
-        }
+        //while(strlen(buffer3) > 0){
+        //    pthread_cond_wait(&buf3_empty, &buffer3_mutex);
+        //}
 
         //Put temp variable in buffer3
         fill_buffer3(temp);
-        printf("Buffer3 in plus_repl: %s\n", buffer3);
+        //printf("Buffer3 in plus_repl: %s\n", buffer3);
 
         //Singal to output that buffer3 is no longer empty
         pthread_cond_signal(&buf3_full);
@@ -363,29 +365,31 @@ void *plus_rep(void *args){
 void *output(void *args){
     while(terminate == false){
 
-        //Lock buffer2_mutex before using buffer1
+        //Lock buffer3_mutex before using buffer1
         pthread_mutex_lock(&buffer3_mutex);
 
-        //Wait until buffer2 has something in it
+        //Wait until buffer3 has something in it
         //Signal coming from *line_sep
         while(strlen(buffer3) == 0){
             pthread_cond_wait(&buf3_full, &buffer3_mutex);
         }
 
-        //Acquire buffer2
+        //Acquire buffer3
         char* temp = (char *)malloc(SIZE * sizeof(char));
         strcpy(temp, get_buffer3());
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 2 IS EMPTY)
-        pthread_cond_signal(&buf3_empty);
+        //pthread_cond_signal(&buf3_empty);
 
         //Unlock buffer2_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer3_mutex);
+        printf("BUFFER3: %s\n", buffer3);
 
-        //Place temp in buffer4 and process
+        //Place temp in buffer4
         fill_buffer4(temp);
+
+        //Print buffer4 and modify based on characters printed
         output_c();
-        printf("Buffer4 : %s\n", buffer4);
         free(temp);
     }
     free(buffer4);
