@@ -16,11 +16,7 @@
 char* buffer1;  //Shared between input and line_sep
 char* buffer2;  //Shared between line_sep and plus_replace
 char* buffer3;  //Shared between plus_replace and output
-char* buffer4;
-
-char* line_temp;
-
-bool terminate = false; //Flag that determines whether terminating string found
+char* buffer4;  //Only used for output (not a shared buffer)
 
 //Initialize mutexes 
 pthread_mutex_t buffer1_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -83,21 +79,10 @@ char* get_buffer3(){
 ***************************************/
 
 //Reads user input, checks for null terminating character,
-void input_p(char* tempBuf){
+void get_user_input(char* tempBuf){
     size_t len = SIZE;  
     char buf[256];
     getline(&tempBuf, &len, stdin);
-
-    //sscanf will strip the carriage return from tempBuf before placing in buf
-    //This will make the strcmp work as expected
-    sscanf(tempBuf, "%s", buf);
-
-    //If terminating input line is found, 
-    //Need to account for input like "DONE more stuff"
-    //sscanf will strip off first word and mistake above example as terminating
-    if(strcmp(buf, "DONE") == 0){
-        terminate = true;
-    }
 }
 
 //Goes through temp and changes any line 
@@ -146,7 +131,7 @@ void output_c(){
 
     //If buffer has at least 80 characters, print buffer
     while(buffer4_len >= CHAR_PER_LINE){
-        printf("((%.80s))\n", buffer4);
+        printf("%.80s\n", buffer4);
 
         //Clear out first 80 character of buffer3
         memset(buffer4, '\0', CHAR_PER_LINE);
@@ -221,17 +206,23 @@ void fill_buffer4(char* temp){
 ***********************************************/
 void *input(void *args){
     char* tempBuf = (char *)malloc(MAX_LINE * sizeof(char)); //Temporary buffer that will add to buffer1
+    bool input_terminate = false;
 
-    while(terminate == false){
-        input_p(tempBuf);
-        printf("tempBuf: %s\n", tempBuf);
+    while(input_terminate == false){
+        get_user_input(tempBuf);
+        //printf("temp in input: %s\n", tempBuf);
+        if(strcmp(tempBuf, "DONE\n") == 0){
+            //printf("found term in input\n");
+            input_terminate = true;
+        }
+
         //Lock buffer1_mutex before changing buffer1
         pthread_mutex_lock(&buffer1_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER1 TO BE EMPTY)
-        //while(strlen(buffer1) > 0){
-        //    pthread_cond_wait(&buf1_empty, &buffer1_mutex);
-        //}
+        while(strlen(buffer1) > 0){
+            pthread_cond_wait(&buf1_empty, &buffer1_mutex);
+        }
 
         //Perform input
         fill_buffer1(tempBuf);
@@ -256,7 +247,8 @@ void *input(void *args){
 * Producer and Consumer
 ***********************************************/
 void *line_sep(void *args){
-    while(terminate == false){
+    bool line_sep_terminate = false;
+    while(line_sep_terminate == false){
 
         //Lock buffer1_mutex before using buffer1
         pthread_mutex_lock(&buffer1_mutex);
@@ -270,9 +262,16 @@ void *line_sep(void *args){
         //Acquire buffer1
         char* temp = (char *)malloc(SIZE * sizeof(char));
         strcpy(temp, get_buffer1());
+        //printf("temp in line: %s\n", temp);
+
+        //Check for terminating line
+        if(strcmp(temp, "DONE\n") == 0){
+            //printf("found term in line_sep\n");
+            line_sep_terminate = true;
+        }
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 1 IS EMPTY)
-        //pthread_cond_signal(&buf1_empty);
+        pthread_cond_signal(&buf1_empty);
 
         //Unlock buffer1_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer1_mutex);
@@ -286,9 +285,9 @@ void *line_sep(void *args){
         pthread_mutex_lock(&buffer2_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER2 TO BE EMPTY)
-       // while(strlen(buffer2) > 0){
-         //   pthread_cond_wait(&buf2_empty, &buffer2_mutex);
-        //}
+        while(strlen(buffer2) > 0){
+            pthread_cond_wait(&buf2_empty, &buffer2_mutex);
+        }
 
         //Put temp variable in buffer2
         fill_buffer2(temp);
@@ -310,7 +309,8 @@ void *line_sep(void *args){
 * Producer and Consumer
 ***********************************************/
 void *plus_rep(void *args){
-    while(terminate == false){
+    bool plus_rep_terminate = false;
+    while(plus_rep_terminate == false){
 
         //Lock buffer2_mutex before using buffer1
         pthread_mutex_lock(&buffer2_mutex);
@@ -324,15 +324,23 @@ void *plus_rep(void *args){
         //Acquire buffer2
         char* temp = (char *)malloc(SIZE * sizeof(char));
         strcpy(temp, get_buffer2());
+        //printf("temp in plus: %s\n", temp);
+
+        //Check for terminating line
+        //Have to check for DONE with a space character since line_sep will change the newline to a space
+        if(strcmp(temp, "DONE ") == 0){
+            //printf("found term in plus\n");
+            plus_rep_terminate = true;
+        }
+
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 2 IS EMPTY)
-        //pthread_cond_signal(&buf2_empty);
+        pthread_cond_signal(&buf2_empty);
 
         //Unlock buffer2_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer2_mutex);
 
         //Process temp
-        printf("BUFFER2: %s\n", buffer2);
         replace_plus_signs(temp);
 
         //Producer Buffer3
@@ -340,9 +348,9 @@ void *plus_rep(void *args){
         pthread_mutex_lock(&buffer3_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER2 TO BE EMPTY)
-        //while(strlen(buffer3) > 0){
-        //    pthread_cond_wait(&buf3_empty, &buffer3_mutex);
-        //}
+        while(strlen(buffer3) > 0){
+            pthread_cond_wait(&buf3_empty, &buffer3_mutex);
+        }
 
         //Put temp variable in buffer3
         fill_buffer3(temp);
@@ -363,7 +371,8 @@ void *plus_rep(void *args){
 * Consumer only
 ***********************************************/
 void *output(void *args){
-    while(terminate == false){
+    bool output_terminate = false;
+    while(output_terminate == false){
 
         //Lock buffer3_mutex before using buffer1
         pthread_mutex_lock(&buffer3_mutex);
@@ -377,13 +386,20 @@ void *output(void *args){
         //Acquire buffer3
         char* temp = (char *)malloc(SIZE * sizeof(char));
         strcpy(temp, get_buffer3());
+        
+        //Check for terminating line
+        //Have to check for DONE with a space character since line_sep changes newline to space
+        //printf("temp in output: %s\n", temp);
+        if(strcmp(temp, "DONE ") == 0){
+            //printf("found term in output\n");
+            output_terminate = true;
+        }
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 2 IS EMPTY)
-        //pthread_cond_signal(&buf3_empty);
+        pthread_cond_signal(&buf3_empty);
 
         //Unlock buffer2_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer3_mutex);
-        printf("BUFFER3: %s\n", buffer3);
 
         //Place temp in buffer4
         fill_buffer4(temp);
