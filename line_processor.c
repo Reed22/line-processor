@@ -228,9 +228,9 @@ void *input(void *args){
         pthread_mutex_lock(&buffer1_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER1 TO BE EMPTY)
-        while(strlen(buffer1) > 0){
-            pthread_cond_wait(&buf1_empty, &buffer1_mutex);
-        }
+      //  while(strlen(buffer1) > 0){
+        //    pthread_cond_wait(&buf1_empty, &buffer1_mutex);
+        //}
 
         //Perform input
         fill_buffer1(tempBuf);
@@ -271,7 +271,7 @@ void *line_sep(void *args){
         strcpy(temp, get_buffer1());
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 1 IS EMPTY)
-        pthread_cond_signal(&buf1_empty);
+       // pthread_cond_signal(&buf1_empty);
 
         //Unlock buffer1_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer1_mutex);
