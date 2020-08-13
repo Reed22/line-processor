@@ -144,6 +144,7 @@ char* replace_plus_signs(char* temp){
 //Outputs if 80 characters are in buffer
 void output_c(){
     int buffer4_len = strlen(buffer4);
+    printf("buffer4_len before: %d\n", buffer4_len);
     int offset = 0;  //Used for copying characters from 80th+ index to offset index
 
     //If buffer has at least 80 characters, print buffer
@@ -161,7 +162,10 @@ void output_c(){
             buffer4[i] = '\0';
             offset++;
         }
-        buffer4_len = strlen(buffer4);
+        printf("buffer4_len before: %d\n", buffer4_len);
+        buffer4_len = buffer4_len - CHAR_PER_LINE;//strlen(buffer4);
+        printf("buffer4_len after: %d\n", buffer4_len);
+
     }
 }
 /***************************************
