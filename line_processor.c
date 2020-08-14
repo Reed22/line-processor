@@ -44,25 +44,25 @@ pthread_cond_t buf3_empty = PTHREAD_COND_INITIALIZER;
 * of the buffer
 ***************************************/
 
-char* get_buffer1(){
-    char temp[strlen(buffer1)];
+void get_buffer1(char* temp){
+    //char temp[strlen(buffer1)];
     strcpy(temp, buffer1);
     memset(buffer1, '\0', strlen(buffer1));
-    return temp;
+    //return temp;
 }
 
-char* get_buffer2(){
-    char temp[strlen(buffer2)];
+void get_buffer2(char* temp){
+    //char temp[strlen(buffer2)];
     strcpy(temp, buffer2);
     memset(buffer2, '\0', strlen(buffer2));
-    return temp;
+    //return temp;
 }
 
-char* get_buffer3(){
-    char temp[strlen(buffer3)];
+void get_buffer3(char* temp){
+    //char temp[strlen(buffer3)];
     strcpy(temp, buffer3);
     memset(buffer3, '\0', strlen(buffer3));
-    return temp;
+    //return temp;
 }
 
 /***************************************
@@ -261,7 +261,8 @@ void *line_sep(void *args){
 
         //Acquire buffer1
         char* temp = (char *)malloc(SIZE * sizeof(char));
-        strcpy(temp, get_buffer1());
+        //strcpy(temp, get_buffer1());
+        get_buffer1(temp);
         //printf("temp in line: %s\n", temp);
 
         //Check for terminating line
@@ -323,7 +324,8 @@ void *plus_rep(void *args){
 
         //Acquire buffer2
         char* temp = (char *)malloc(SIZE * sizeof(char));
-        strcpy(temp, get_buffer2());
+        //strcpy(temp, get_buffer2());
+        get_buffer2(temp);
         //printf("temp in plus: %s\n", temp);
 
         //Check for terminating line
@@ -385,7 +387,8 @@ void *output(void *args){
 
         //Acquire buffer3
         char* temp = (char *)malloc(SIZE * sizeof(char));
-        strcpy(temp, get_buffer3());
+        //strcpy(temp, get_buffer3());
+        get_buffer3(temp);
         
         //Check for terminating line
         //Have to check for DONE with a space character since line_sep changes newline to space
