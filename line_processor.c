@@ -16,7 +16,6 @@
 char* buffer1;  //Shared between input and line_sep
 char* buffer2;  //Shared between line_sep and plus_replace
 char* buffer3;  //Shared between plus_replace and output
-char* buffer4;  //Only used for output (not a shared buffer)
 
 //Initialize mutexes 
 pthread_mutex_t buffer1_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -26,13 +25,8 @@ pthread_mutex_t buffer3_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Initialize the condition variables
 pthread_cond_t buf1_full = PTHREAD_COND_INITIALIZER;
-pthread_cond_t buf1_empty = PTHREAD_COND_INITIALIZER;
-
 pthread_cond_t buf2_full = PTHREAD_COND_INITIALIZER;
-pthread_cond_t buf2_empty = PTHREAD_COND_INITIALIZER;
-
 pthread_cond_t buf3_full = PTHREAD_COND_INITIALIZER;
-pthread_cond_t buf3_empty = PTHREAD_COND_INITIALIZER;
 
 /***************************************
 * Consumer functions for all threads
@@ -45,24 +39,18 @@ pthread_cond_t buf3_empty = PTHREAD_COND_INITIALIZER;
 ***************************************/
 
 void get_buffer1(char* temp){
-    //char temp[strlen(buffer1)];
     strcpy(temp, buffer1);
     memset(buffer1, '\0', strlen(buffer1));
-    //return temp;
 }
 
 void get_buffer2(char* temp){
-    //char temp[strlen(buffer2)];
     strcpy(temp, buffer2);
     memset(buffer2, '\0', strlen(buffer2));
-    //return temp;
 }
 
 void get_buffer3(char* temp){
-    //char temp[strlen(buffer3)];
     strcpy(temp, buffer3);
     memset(buffer3, '\0', strlen(buffer3));
-    //return temp;
 }
 
 /***************************************
@@ -81,7 +69,6 @@ void get_buffer3(char* temp){
 //Reads user input, checks for null terminating character,
 void get_user_input(char* tempBuf){
     size_t len = SIZE;  
-    char buf[256];
     getline(&tempBuf, &len, stdin);
 }
 
@@ -124,10 +111,9 @@ void replace_plus_signs(char* temp){
 }
 
 //Outputs if 80 characters are in buffer
-void output_c(){
-    int buffer4_len = strlen(buffer4);
-    //printf("buffer4_len before: %d\n", buffer4_len);
-    int offset;  //Used for copying characters from 80th+ index to offset index
+void output_c(char* buffer4){
+    int buffer4_len = strlen(buffer4);  //Number of characters in buffer4
+    int offset;                         //Used for copying characters from 80th+ index to offset index
 
     //If buffer has at least 80 characters, print buffer
     while(buffer4_len >= CHAR_PER_LINE){
@@ -189,7 +175,8 @@ void fill_buffer3(char* temp){
     }
 }
 
-void fill_buffer4(char* temp){
+//This buffer is not global, so buffer4 needs to be passed in
+void fill_buffer4(char* temp, char* buffer4){
     if(strlen(buffer4) == 0){
         strcpy(buffer4, temp);
     }
@@ -206,7 +193,7 @@ void fill_buffer4(char* temp){
 ***********************************************/
 void *input(void *args){
     char* tempBuf = (char *)malloc(MAX_LINE * sizeof(char)); //Temporary buffer that will add to buffer1
-    bool input_terminate = false;
+    bool input_terminate = false;                           //Flag used to exit while loop if terminating character found
 
     while(input_terminate == false){
         get_user_input(tempBuf);
@@ -240,7 +227,8 @@ void *input(void *args){
 * Producer and Consumer
 ***********************************************/
 void *line_sep(void *args){
-    bool line_sep_terminate = false;
+    bool line_sep_terminate = false;                    //Flag used to exit while loop if terminating character found
+    char* temp = (char *)malloc(SIZE * sizeof(char));   //Temporary buffer used to hold buffer1
     while(line_sep_terminate == false){
 
         //Lock buffer1_mutex before using buffer1
@@ -253,7 +241,6 @@ void *line_sep(void *args){
         }
 
         //Acquire buffer1
-        char* temp = (char *)malloc(SIZE * sizeof(char));
         get_buffer1(temp);
 
 
@@ -275,7 +262,6 @@ void *line_sep(void *args){
         //Process temp
         replace_line_separators(temp);
 
-
         //Producer Buffer2
         //Try to take buffer2_mutex if plus_rep doesn't have it
         pthread_mutex_lock(&buffer2_mutex);
@@ -288,9 +274,10 @@ void *line_sep(void *args){
 
         //Unlock buffer2_mutex so plus_rep can do its thing
         pthread_mutex_unlock(&buffer2_mutex);
+        memset(temp, '\0', strlen(temp));
 
-        free(temp);
     }
+    free(temp);
 }
 /***********************************************
 *          void *plus_rep(void *args)
@@ -299,7 +286,8 @@ void *line_sep(void *args){
 * Producer and Consumer
 ***********************************************/
 void *plus_rep(void *args){
-    bool plus_rep_terminate = false;
+    bool plus_rep_terminate = false;                    //Flag used to exit while loop if terminating character found
+    char* temp = (char *)malloc(SIZE * sizeof(char));   //Temporary buffer used to hold buffer2
     while(plus_rep_terminate == false){
 
         //Lock buffer2_mutex before using buffer1
@@ -312,7 +300,6 @@ void *plus_rep(void *args){
         }
 
         //Acquire buffer2
-        char* temp = (char *)malloc(SIZE * sizeof(char));
         get_buffer2(temp);
 
         //Unlock buffer2_mutex so *input can do its thing
@@ -345,8 +332,11 @@ void *plus_rep(void *args){
 
         //Unlock buffer3_mutex so output can do its thing
         pthread_mutex_unlock(&buffer3_mutex);
-        free(temp);
+        
+        memset(temp, '\0', strlen(temp));
+
     }
+    free(temp);
 }
 /***********************************************
 *          void *output(void *args)
@@ -355,7 +345,9 @@ void *plus_rep(void *args){
 * Consumer only
 ***********************************************/
 void *output(void *args){
-    bool output_terminate = false;
+    char* buffer4 = (char *)malloc(SIZE * sizeof(char)); //Holds buffer3 until ready for output
+    bool output_terminate = false;                       //Flag used to exit while loop if terminating character found
+    char* temp = (char *)malloc(SIZE * sizeof(char));   //Temporary buffer that will hold buffer3
     while(output_terminate == false){
 
         //Lock buffer3_mutex before using buffer1
@@ -368,7 +360,6 @@ void *output(void *args){
         }
 
         //Acquire buffer3
-        char* temp = (char *)malloc(SIZE * sizeof(char));
         get_buffer3(temp);
 
         //Unlock buffer2_mutex so *input can do its thing
@@ -388,14 +379,15 @@ void *output(void *args){
         }
 
         //Place temp in buffer4
-        fill_buffer4(temp);
+        fill_buffer4(temp, buffer4);
 
         //Print buffer4 and modify based on characters printed
-        output_c();
+        output_c(buffer4);
 
-        free(temp);
+        memset(temp, '\0', strlen(temp));
     }
     free(buffer4);
+    free(temp);
 }
 /***********************************************
 *               int main()
@@ -405,7 +397,6 @@ int main(){
     buffer1 = (char *)malloc(SIZE * sizeof(char));
     buffer2 = (char *)malloc(SIZE * sizeof(char));
     buffer3 = (char *)malloc(SIZE * sizeof(char));
-    buffer4 = (char *)malloc(SIZE * sizeof(char));
 
     //Create threads
     pthread_create(&in, NULL, input, NULL);
