@@ -210,19 +210,14 @@ void *input(void *args){
 
     while(input_terminate == false){
         get_user_input(tempBuf);
-        //printf("temp in input: %s\n", tempBuf);
-        if(strcmp(tempBuf, "DONE\n") == 0){
-            //printf("found term in input\n");
-            input_terminate = true;
-        }
 
         //Lock buffer1_mutex before changing buffer1
         pthread_mutex_lock(&buffer1_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER1 TO BE EMPTY)
-        while(strlen(buffer1) > 0){
-            pthread_cond_wait(&buf1_empty, &buffer1_mutex);
-        }
+        //while(strlen(buffer1) > 0){
+        //    pthread_cond_wait(&buf1_empty, &buffer1_mutex);
+       // }
 
         //Perform input
         fill_buffer1(tempBuf);
@@ -233,7 +228,10 @@ void *input(void *args){
 
         //Unlock mutex
         pthread_mutex_unlock(&buffer1_mutex);
-        
+                //printf("temp in input: %s\n", tempBuf);
+        if(strcmp(tempBuf, "DONE\n") == 0){
+            input_terminate = true;
+        }
         memset(tempBuf, '\0', strlen(tempBuf));
 
     }
@@ -265,18 +263,22 @@ void *line_sep(void *args){
         get_buffer1(temp);
         //printf("temp in line: %s\n", temp);
 
-        //Check for terminating line
-        if(strcmp(temp, "DONE\n") == 0){
-            //printf("found term in line_sep\n");
-            line_sep_terminate = true;
-        }
-
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 1 IS EMPTY)
-        pthread_cond_signal(&buf1_empty);
+        //pthread_cond_signal(&buf1_empty);
 
         //Unlock buffer1_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer1_mutex);
-       
+              //Check for terminating line
+        //Have to check for DONE with a space character since line_sep changes newline to space
+        if(strlen(temp) > strlen("DONE\n")){
+            if (strcmp(temp + strlen(temp)-5, "DONE\n") == 0 ){
+                line_sep_terminate = true;
+            }
+        }
+        //If buffer was flushed, temp will just hold "DONE " if terminating line was inputted
+        else if(strcmp(temp, "DONE\n") == 0){
+            line_sep_terminate = true;
+        }
         //Process temp
         replace_line_separators(temp);
 
@@ -286,9 +288,9 @@ void *line_sep(void *args){
         pthread_mutex_lock(&buffer2_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER2 TO BE EMPTY)
-        while(strlen(buffer2) > 0){
-            pthread_cond_wait(&buf2_empty, &buffer2_mutex);
-        }
+        //while(strlen(buffer2) > 0){
+        //    pthread_cond_wait(&buf2_empty, &buffer2_mutex);
+        //}
 
         //Put temp variable in buffer2
         fill_buffer2(temp);
@@ -328,20 +330,27 @@ void *plus_rep(void *args){
         get_buffer2(temp);
         //printf("temp in plus: %s\n", temp);
 
-        //Check for terminating line
-        //Have to check for DONE with a space character since line_sep will change the newline to a space
-        if(strcmp(temp, "DONE ") == 0){
-            //printf("found term in plus\n");
-            plus_rep_terminate = true;
-        }
+
 
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 2 IS EMPTY)
-        pthread_cond_signal(&buf2_empty);
+        //pthread_cond_signal(&buf2_empty);
 
         //Unlock buffer2_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer2_mutex);
-
+       
+       //Check for terminating line
+        //Have to check for DONE with a space character since line_sep changes newline to space
+        //printf("temp in output: %s\n", temp);
+        if(strlen(temp) > strlen("DONE ")){
+            if (strcmp(temp + strlen(temp)-5, "DONE ") == 0 ){
+                plus_rep_terminate = true;
+            }
+        }
+        //If buffer was flushed, temp will just hold "DONE " if terminating line was inputted
+        else if(strcmp(temp, "DONE ") == 0){
+            plus_rep_terminate = true;
+        }
         //Process temp
         replace_plus_signs(temp);
 
@@ -350,9 +359,9 @@ void *plus_rep(void *args){
         pthread_mutex_lock(&buffer3_mutex);
 
         //SHOULDN'T NEED THIS(WAITS FOR BUFFER2 TO BE EMPTY)
-        while(strlen(buffer3) > 0){
-            pthread_cond_wait(&buf3_empty, &buffer3_mutex);
-        }
+        //while(strlen(buffer3) > 0){
+        //    pthread_cond_wait(&buf3_empty, &buffer3_mutex);
+       // }
 
         //Put temp variable in buffer3
         fill_buffer3(temp);
@@ -390,19 +399,25 @@ void *output(void *args){
         //strcpy(temp, get_buffer3());
         get_buffer3(temp);
         
-        //Check for terminating line
-        //Have to check for DONE with a space character since line_sep changes newline to space
-        //printf("temp in output: %s\n", temp);
-        if(strcmp(temp, "DONE ") == 0){
-            //printf("found term in output\n");
-            output_terminate = true;
-        }
 
         //SHOULDN'T NEED TO DO THIS (SIGNALS TO *INPUT THAT BUFFER 2 IS EMPTY)
-        pthread_cond_signal(&buf3_empty);
+        //pthread_cond_signal(&buf3_empty);
 
         //Unlock buffer2_mutex so *input can do its thing
         pthread_mutex_unlock(&buffer3_mutex);
+       
+        //Check for terminating line
+        //Have to check for DONE with a space character since line_sep changes newline to space
+        //printf("temp in output: %s\n", temp);
+        if(strlen(temp) > strlen("DONE ")){
+            if (strcmp(temp + strlen(temp)-5, "DONE ") == 0 ){
+                output_terminate = true;
+            }
+        }
+        //If buffer was flushed, temp will just hold "DONE " if terminating line was inputted
+        else if(strcmp(temp, "DONE ") == 0){
+            output_terminate = true;
+        }
 
         //Place temp in buffer4
         fill_buffer4(temp);
